@@ -1,6 +1,8 @@
 /* eslint-disable newline-per-chained-call */
 import Joi from '@hapi/joi';
 
+export const schemaErrorMessage = message => () => message;
+
 const signupSchema = Joi.object().keys({
   firstName: Joi.string().strict().trim().required(),
   lastName: Joi.string().strict().trim().required(),
@@ -37,7 +39,7 @@ const oneWaySchema = Joi.object().keys({
   goingTo: Joi.number().strict().required(),
   travelDate: Joi.date().required(),
   reason: Joi.string().strict().required(),
-  rooms: Joi.array().items(Joi.number().error(() => 'rooms must be an integer value'))
+  rooms: Joi.array().items(Joi.number().error(schemaErrorMessage('rooms must be an integer value')))
 }).options({
   abortEarly: false,
   language: {
@@ -90,7 +92,7 @@ const twoWaySchema = Joi.object().keys({
   travelDate: Joi.date().required(),
   returnDate: Joi.date().greater(Joi.ref('travelDate')).required(),
   reason: Joi.string().strict().required(),
-  rooms: Joi.array().items(Joi.number().error(() => 'rooms must be an integer value')),
+  rooms: Joi.array().items(Joi.number().error(schemaErrorMessage('rooms must be an integer value'))),
 }).options({
   abortEarly: false,
   language: {
@@ -128,7 +130,7 @@ const updateTripSchema = Joi.object().keys({
       then: Joi.required(),
     }).allow(null, ''),
   rooms: Joi.array()
-    .items(Joi.number().error(() => 'rooms must be an integer value')),
+    .items(Joi.number().error(schemaErrorMessage('rooms must be an integer value'))),
   reason: Joi.string().strict(),
 }).options({
   abortEarly: false,
@@ -235,15 +237,52 @@ const rateSchema = Joi.object()
 
 const updateRatingSchema = Joi.object()
   .keys({
-    rating: Joi.number().integer().min(1).max(5)
+    rating: Joi.number()
+      .integer()
+      .min(1)
+      .max(5)
       .strict()
-      .required()
+      .required(),
   })
   .options({
     abortEarly: false,
     language: {
-      key: '{{key}} '
-    }
+      key: '{{key}} ',
+    },
+  });
+
+const verify2FASchema = Joi.object()
+  .keys({
+    token: Joi.number()
+      .integer()
+      .min(6)
+      .max(6)
+      .strict()
+      .required(),
+  })
+  .options({
+    abortEarly: false,
+    language: {
+      key: '{{key}} ',
+    },
+  });
+
+const sendTokenText2FASchema = Joi.object()
+  .keys({
+    secret: Joi.string()
+      .regex(/^[A-Z0-9]{32}$/)
+      .required()
+      .error(schemaErrorMessage('"secret" must be a 32 alpha-numeric capital letter string')),
+    phoneNumber: Joi.string()
+      .regex(/^\+[1-9]\d{1,14}$/)
+      .required()
+      .error(schemaErrorMessage('"phoneNumber" must be of format +1234567890')),
+  })
+  .options({
+    abortEarly: false,
+    language: {
+      key: '{{key}} ',
+    },
   });
 
 export default {
@@ -263,5 +302,7 @@ export default {
   '/trips/stats': tripsStatsSchema,
   '/hotels/:hotelId/feedback': feedbackSchema,
   '/hotels/:hotelId/rating': rateSchema,
-  '/rating/:ratingId': updateRatingSchema
+  '/rating/:ratingId': updateRatingSchema,
+  '/2fa/totp/verify': verify2FASchema,
+  '/2fa/totp/send-token-text': sendTokenText2FASchema,
 };
