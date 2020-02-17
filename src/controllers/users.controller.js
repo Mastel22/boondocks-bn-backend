@@ -1,12 +1,17 @@
+/* eslint-disable no-unused-vars */
 /* eslint-disable no-bitwise */
 /* eslint-disable no-else-return */
+import fs from 'fs';
+import request from 'request';
+import { resolve as resolv } from 'path';
 import Responses from '../utils/response';
 import hash from '../utils/hash';
 import JWTHelper from '../utils/jwt';
 import db from '../models';
-import UserServices from '../services/User.service';
 import Mailer from '../services/Mailer.services';
-
+import filesService from '../services/files.service';
+import UserService from '../services/User.service';
+import ErrorHandler from '../utils/error';
 /**
  * Class for users related operations
  */
@@ -52,7 +57,7 @@ class UserController {
    * excluing the password
    */
   async findUser(req, res) {
-    const user = await UserServices.findUserByEmail(req.body.email);
+    const user = await UserService.findUserByEmail(req.body.email);
     if (!user) {
       return Responses.handleError(404, 'invalid credentials', res);
     }
@@ -123,7 +128,7 @@ class UserController {
    */
   async forgotPassword(req, res) {
     const { host } = req.query;
-    const user = await UserServices.findUserByEmail(req.body.email);
+    const user = await UserService.findUserByEmail(req.body.email);
     if (!user) {
       return Responses.handleError(404, 'User with such email does not exist', res);
     }
@@ -179,7 +184,7 @@ class UserController {
     const userData = { ...req.body };
     const { user } = res.locals;
 
-    const data = await UserServices.updateUserInfoByEmail({ ...userData }, user.email);
+    const data = await UserService.updateUserInfoByEmail({ ...userData }, user.email);
 
     if (data === 'own_manage') {
       return Responses.handleError(409, 'You cannot manage your self', res);
@@ -204,7 +209,7 @@ class UserController {
     userId = Number(userId);
 
     if (typeof userId === 'number' && userId > 0 && userId >>> 0 === userId) {
-      const userData = await UserServices.getUserById(userId);
+      const userData = await UserService.getUserById(userId);
 
       if (userData) {
         const user = userData.dataValues;
@@ -262,6 +267,125 @@ class UserController {
 
     const allUsers = await db.user.findAll(options);
     return Responses.handleSuccess(200, 'successfully retrieved all users', res, allUsers);
+  }
+
+  /**
+   * Upload travel documents
+   * @param {object} req
+   * @param {object} res
+   * @returns {object} response
+   */
+  async uploadDocument(req, res) {
+    const {
+      name,
+    } = req.body;
+
+    let url = '';
+    if (req.file === undefined) {
+      return Responses.handleError(400, 'Document not found, upload the document', res);
+    }
+    const {
+      filename,
+      path,
+      mimetype
+    } = req.file;
+
+    url = await filesService.s3Upload({ path, filename, mimetype }, 'documents');
+
+
+    const { userId } = res.locals.user;
+
+    const document = await UserService.addDocument({ name, url, userId });
+    Responses.handleSuccess(201, 'Document uploaded successfully', res, { name, url, userId });
+  }
+
+  /**
+   * Delete travel document
+   * @param {object} req
+   * @param {object} res
+   * @returns {object} response
+   */
+  async deleteDocument(req, res) {
+    const { id } = req.params;
+    const { userId } = res.locals.user;
+
+    const document = await UserService.getDocument(id);
+
+    const isOwner = document.userId === userId;
+
+    if (isOwner) {
+      await UserService.deleteDocument(id);
+      return Responses.handleSuccess(200, 'Document Deleted successfully', res);
+    }
+    return Responses.handleError(409, 'Document does not belong to you', res);
+  }
+
+
+  /**
+   * Retrieve travel document
+   * @param {object} req
+   * @param {object} res
+   * @returns {object} response
+   */
+  async getDocuments(req, res) {
+    const { userId, role } = res.locals.user;
+    const requesterId = role === 'requester' && userId;
+    const documents = await UserService.retrieveDocuments({ requesterId });
+    Responses.handleSuccess(200, 'Documents retrieved successfully', res, documents);
+  }
+
+  /**
+   * verify a travel document
+   * @param {object} req
+   * @param {object} res
+   * @returns {object} response
+   */
+  async verifyDocument(req, res) {
+    const { id } = req.params;
+    const { userId } = res.locals.user;
+    await UserService.verifyDocument(id, userId);
+    return Responses.handleSuccess(200, 'Document verified successfully', res);
+  }
+
+  /**
+   * Preview document
+   * @param {Object} req
+   * @param {Object} res
+   * @returns {File} document
+   */
+  async downloadDocument(req, res) {
+    const { id } = req.params;
+    const document = await UserService.getDocument(id);
+
+    const dir = 'public/temp';
+
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir);
+    }
+    const documentName = `${document.name}`;
+    const documentOwner = `${document.documentOwner.firstName}-${document.documentOwner.lastName}`;
+    const fileExtension = `${document.url.split('.').pop()}`;
+
+    const filename = `${documentOwner}-${documentName}-${(new Date()).getTime()}.${fileExtension}`;
+    const file = fs.createWriteStream(`public/temp/${filename}`);
+
+    await new Promise((resolve, reject) => {
+      const stream = request({
+        uri: document.url,
+        gzip: true
+      })
+        .pipe(file)
+        .on('finish', () => {
+          resolve();
+        })
+        .on('error', (error) => {
+          reject(error);
+        });
+    }).catch(error => {
+      throw new ErrorHandler(error);
+    });
+
+    res.download(resolv(`public/temp/${filename}`));
   }
 }
 

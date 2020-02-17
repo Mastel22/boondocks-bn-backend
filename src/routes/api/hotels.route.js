@@ -79,7 +79,8 @@ router.post(
   '/hotels',
   verifyUser,
   authorize(['travel_administrator', 'suppliers', 'super_administrator']),
-  fileService.upload('image'),
+  fileService.upload('image', 'images', 5, ['image/png', 'image/jpg', 'image/jpeg'],
+    'Only .png, .jpg and .jpeg formats allowed!'),
   validation,
   catchErrors(hotels.createHotel)
 );
@@ -150,7 +151,8 @@ router.post(
   '/hotels/:hotelId/rooms',
   verifyUser,
   authorize(['travel_administrator', 'suppliers', 'super_administrator']),
-  fileService.upload('image'),
+  fileService.upload('image', 'images', 5, ['image/png', 'image/jpg', 'image/jpeg'],
+    'Only .png, .jpg and .jpeg formats allowed!'),
   validation,
   catchErrors(hotels.addRoom),
 );

@@ -4,10 +4,17 @@ import checkForEmail from '../../validation/user.validation';
 import { validation } from '../../validation/validation';
 import catchErrors from '../../utils/helper';
 import { decodeQueryToken, verifyUser } from '../../middlewares/checkToken';
+import filesService from '../../services/files.service';
+import authorize from '../../middlewares/roleAuthorization';
 
 const {
   updateUserInfo,
   getUserProfile,
+  uploadDocument,
+  deleteDocument,
+  getDocuments,
+  verifyDocument,
+  downloadDocument,
 } = users;
 
 const router = express.Router();
@@ -381,6 +388,44 @@ router.get(
   '/user/:userId',
   verifyUser,
   catchErrors(getUserProfile)
+);
+
+
+router.post(
+  '/users/documents',
+  verifyUser,
+  authorize(['requester']),
+  filesService.upload('document', 'documents', 10,
+    ['image/png', 'image/jpg', 'image/jpeg', 'application/pdf'],
+    'Only .png, .jpg, .jpeg and .pdf formats allowed!'),
+  validation,
+  catchErrors(uploadDocument),
+);
+
+router.delete(
+  '/users/documents/:id',
+  verifyUser,
+  authorize(['requester']),
+  catchErrors(deleteDocument),
+);
+
+router.get(
+  '/users/documents',
+  verifyUser,
+  authorize(['travel_administrator', 'requester']),
+  catchErrors(getDocuments),
+);
+
+router.patch(
+  '/documents/:id/verify',
+  verifyUser,
+  authorize(['travel_administrator']),
+  catchErrors(verifyDocument),
+);
+
+router.get(
+  '/documents/:id/download',
+  catchErrors(downloadDocument),
 );
 
 export default router;

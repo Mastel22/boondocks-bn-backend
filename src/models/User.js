@@ -129,6 +129,15 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: 'hotelId',
       onDelete: 'CASCADE'
     });
+    User.hasMany(models.document, {
+      foreignKey: 'userId',
+      onDelete: 'CASCADE',
+      as: 'documentowner',
+    });
+    User.hasMany(models.document, {
+      foreignKey: 'travelAdminId',
+      as: 'admin'
+    });
   };
   return User;
 };
